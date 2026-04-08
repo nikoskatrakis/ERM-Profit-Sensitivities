@@ -10,7 +10,9 @@ from tkinter import messagebox, ttk
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import proj3d
+
 
 
 # ============================================================
@@ -114,7 +116,7 @@ class ERMModel:
         house_price_scr = exp(ln_price_scr)
 
         accumulated_loan = params.loan_amount * (1.0 + params.loan_rate) ** params.time_years
-        scr = accumulated_loan - house_price_scr
+        scr = np.maximum(accumulated_loan - house_price_scr,0)
 
         base = exp(-params.scr_decay_factor) / (1.0 + params.risk_free_rate)
         if abs(1.0 - base) < 1e-12:
@@ -232,6 +234,75 @@ class ValueFormatter:
         value = float(cleaned)
         return value / 100.0 if is_percentage else value
 
+    @staticmethod
+    def is_percentage_key(key: str) -> bool:
+        return key in {
+            "rw_hpi",
+            "deferment_rate",
+            "loan_rate",
+            "house_price_volatility",
+            "funding_cost",
+            "coc_rate",
+            "risk_free_rate",
+            "scr_level",
+            "scr_decay_factor",
+        }
+
+    @staticmethod
+    def format_axis_value(value: float, key_or_label: str) -> str:
+        percentage_names = {
+            "rw_hpi", "deferment_rate", "loan_rate", "house_price_volatility",
+            "funding_cost", "coc_rate", "risk_free_rate", "scr_level", "scr_decay_factor",
+            "HPI", "Deferment rate", "Loan accumulation rate", "House price volatility",
+            "Funding cost", "SCR CoC percentage used for pricing", "Risk-free rate",
+            "SCR percentile", "SCR decay factor",
+        }
+        money_names = {
+            "house_price_start", "loan_amount", "Day1Gain", "Profit",
+            "House price at inception", "Loan amount",
+        }
+
+        if key_or_label in percentage_names:
+            return f"{value * 100:.1f}%"
+
+        if key_or_label in money_names:
+            return f"{value / 1000:.1f}K"
+
+        return f"{value:.1f}"
+
+    @staticmethod
+    def format_point_value(value: float, key_or_label: str) -> str:
+        percentage_names = {
+            "rw_hpi", "deferment_rate", "loan_rate", "house_price_volatility",
+            "funding_cost", "coc_rate", "risk_free_rate", "scr_level", "scr_decay_factor",
+            "HPI", "Deferment rate", "Loan accumulation rate", "House price volatility",
+            "Funding cost", "SCR CoC percentage used for pricing", "Risk-free rate",
+            "SCR percentile", "SCR decay factor",
+        }
+        money_names = {
+            "house_price_start", "loan_amount", "Day1Gain", "Profit",
+            "House price at inception", "Loan amount",
+        }
+
+        if key_or_label in percentage_names:
+            return f"{value * 100:.1f}%"
+
+        if key_or_label in money_names:
+            if abs(value) >= 1000:
+                return f"{value / 1000:.3f}K"
+            return f"{value:.2f}"
+
+        return f"{value:.6g}"
+
+    @staticmethod
+    def format_profit_with_loan_ratio(profit: float, loan_amount: float) -> str:
+        if abs(profit) >= 1000:
+            main = f"{profit / 1000:.3f}K"
+        else:
+            main = f"{profit:.2f}"
+
+        ratio = 0.0 if loan_amount == 0 else profit / loan_amount
+        return f"{main} ({ratio * 100:.1f}%)"
 
 class RangeGrid:
     def __init__(self, values: Sequence[float]) -> None:
@@ -378,12 +449,13 @@ class PlotController:
         self._one_way_data: Optional[Tuple[np.ndarray, np.ndarray, str, str]] = None
         self._two_way_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, str, str, str]] = None
         self._cid: Optional[int] = None
+        self._current_loan_amount: float = 0.0
 
     def bind_canvas(self, canvas: FigureCanvasTkAgg) -> None:
         self._canvas = canvas
         self._cid = canvas.mpl_connect("button_press_event", self._on_click)
 
-    def show_line(self, x: np.ndarray, y: np.ndarray, x_label: str, output_label: str) -> None:
+    def show_line(self, x: np.ndarray, y: np.ndarray, x_label: str, output_label: str, loan_amount: float) -> None:
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         ax.plot(x, y, marker="o", linewidth=1.5, markersize=4)
@@ -391,6 +463,11 @@ class PlotController:
         ax.set_ylabel(output_label)
         ax.set_title(f"{output_label} vs {x_label}")
         ax.grid(True, alpha=0.35)
+
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, x_label)))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, output_label)))
+
+        self._current_loan_amount = loan_amount
         self._one_way_data = (x, y, x_label, output_label)
         self._two_way_data = None
         self._last_mode = "line"
@@ -406,6 +483,7 @@ class PlotController:
         x_label: str,
         y_label: str,
         output_label: str,
+        loan_amount: float,
     ) -> None:
         self.figure.clear()
         ax = self.figure.add_subplot(111, projection="3d")
@@ -415,8 +493,12 @@ class PlotController:
         ax.set_ylabel(y_label)
         ax.set_zlabel(output_label)
         ax.set_title(f"{output_label} surface")
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, x_label)))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, y_label)))
+        ax.zaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, output_label)))        
         self._one_way_data = None
         self._two_way_data = (xx, yy, zz, x_label, y_label, output_label)
+        self._current_loan_amount = loan_amount
         self._last_mode = "surface"
         self._info_callback("Rotate the chart as needed. Click near a grid point to inspect its coordinates.")
         if self._canvas:
@@ -429,8 +511,14 @@ class PlotController:
                 return
             distances = (x - event.xdata) ** 2 + (y - event.ydata) ** 2
             idx = int(np.argmin(distances))
+            x_txt = ValueFormatter.format_point_value(x[idx], x_label)
+            if output_label == "Profit":
+                y_txt = ValueFormatter.format_profit_with_loan_ratio(y[idx], self._current_loan_amount)
+            else:
+                y_txt = ValueFormatter.format_point_value(y[idx], output_label)
+
             self._info_callback(
-                f"Nearest point: {x_label} = {x[idx]:.6g}, {output_label} = {y[idx]:.6g}"
+                f"Nearest point: {x_label} = {x_txt}, {output_label} = {y_txt}"
             )
             return
 
@@ -452,11 +540,19 @@ class PlotController:
             distances = (projected_arr[:, 0] - event.x) ** 2 + (projected_arr[:, 1] - event.y) ** 2
             idx = int(np.argmin(distances))
             nearest = points[idx]
+            x_txt = ValueFormatter.format_point_value(nearest[0], x_label)
+            y_txt = ValueFormatter.format_point_value(nearest[1], y_label)
+
+            if output_label == "Profit":
+                z_txt = ValueFormatter.format_profit_with_loan_ratio(nearest[2], self._current_loan_amount)
+            else:
+                z_txt = ValueFormatter.format_point_value(nearest[2], output_label)
 
             self._info_callback(
-                f"Nearest point: {x_label} = {nearest[0]:.6g}, "
-                f"{y_label} = {nearest[1]:.6g}, {output_label} = {nearest[2]:.6g}"
-            )
+                f"Nearest point: {x_label} = {x_txt}, "
+                f"{y_label} = {y_txt}, {output_label} = {z_txt}"
+            )            
+
 
 class VariableControl:
     def __init__(
@@ -764,9 +860,16 @@ class SensitivityApp:
         self.constants_frame.grid(row=3, column=0, sticky="ew", pady=(0, 12))
         self.constants_frame.columnconfigure(1, weight=1)
 
-        self.update_button = ttk.Button(controls, text="Update", command=self.update_chart)
-        self.update_button.grid(row=4, column=0, sticky="ew")
+        button_frame = ttk.Frame(controls)
+        button_frame.grid(row=4, column=0, sticky="ew")
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
 
+        self.update_button = ttk.Button(button_frame, text="Update", command=self.update_chart)
+        self.update_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
+        self.quit_button = ttk.Button(button_frame, text="Quit", command=self.root.destroy)
+        self.quit_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         chart_frame = ttk.Frame(self.root, padding=12)
         chart_frame.grid(row=0, column=1, sticky="nsew")
@@ -859,7 +962,13 @@ class SensitivityApp:
             if x_values is None:
                 return
             x, y = self.service.one_way(base_params, key1, x_values, output_key)
-            self.plot_controller.show_line(x, y, self.catalog.label_for(key1), output_key)
+            self.plot_controller.show_line(
+                x,
+                y,
+                self.catalog.label_for(key1),
+                output_key,
+                base_params.loan_amount,
+            )
             return
 
         x_values = self.var1_control.scenario_values()
@@ -875,6 +984,7 @@ class SensitivityApp:
             self.catalog.label_for(key1),
             self.catalog.label_for(key2),
             output_key,
+            base_params.loan_amount,
         )
 
     def run(self) -> None:
