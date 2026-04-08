@@ -12,7 +12,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import proj3d
-
+from matplotlib import cm
+from matplotlib.colors import TwoSlopeNorm
+from mpl_toolkits.mplot3d import Axes3D
 
 
 # ============================================================
@@ -458,11 +460,33 @@ class PlotController:
     def show_line(self, x: np.ndarray, y: np.ndarray, x_label: str, output_label: str, loan_amount: float) -> None:
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        ax.plot(x, y, marker="o", linewidth=1.5, markersize=4)
+        y_min = float(np.min(y))
+        y_max = float(np.max(y))
+        cmap = cm.get_cmap("RdYlGn")
+
+        if y_min < 0 < y_max:
+            norm = TwoSlopeNorm(vmin=y_min, vcenter=0.0, vmax=y_max)
+        else:
+            limit = max(abs(y_min), abs(y_max), 1e-12)
+            norm = TwoSlopeNorm(vmin=-limit, vcenter=0.0, vmax=limit)
+
+        for i in range(len(x) - 1):
+            color_value = 0.5 * (y[i] + y[i + 1])
+            ax.plot(
+                x[i:i+2],
+                y[i:i+2],
+                linewidth=2.0,
+                color=cmap(norm(color_value)),
+            )
+
+        ax.scatter(x, y, c=y, cmap=cmap, norm=norm, s=28, zorder=3)
         ax.set_xlabel(x_label)
         ax.set_ylabel(output_label)
         ax.set_title(f"{output_label} vs {x_label}")
         ax.grid(True, alpha=0.35)
+        mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array(y)
+        self.figure.colorbar(mappable, ax=ax, shrink=0.85, pad=0.02)
 
         ax.xaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, x_label)))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda val, pos: ValueFormatter.format_axis_value(val, output_label)))
@@ -487,8 +511,36 @@ class PlotController:
     ) -> None:
         self.figure.clear()
         ax = self.figure.add_subplot(111, projection="3d")
-        ax.plot_surface(xx, yy, zz, rstride=1, cstride=1, alpha=0.75)
-        ax.scatter(xx, yy, zz, s=8, depthshade=False)
+        z_min = float(np.min(zz))
+        z_max = float(np.max(zz))
+        cmap = cm.get_cmap("RdYlGn")
+
+        if z_min < 0 < z_max:
+            norm = TwoSlopeNorm(vmin=z_min, vcenter=0.0, vmax=z_max)
+        else:
+            limit = max(abs(z_min), abs(z_max), 1e-12)
+            norm = TwoSlopeNorm(vmin=-limit, vcenter=0.0, vmax=limit)
+
+        facecolors = cmap(norm(zz))
+
+        ax.plot_surface(
+            xx,
+            yy,
+            zz,
+            rstride=1,
+            cstride=1,
+            facecolors=facecolors,
+            linewidth=0,
+            antialiased=True,
+            shade=False,
+            alpha=0.9,
+        )
+        ax.scatter(xx, yy, zz, c=zz, cmap=cmap, norm=norm, s=10, depthshade=False)
+
+        mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array(zz)
+        self.figure.colorbar(mappable, ax=ax, shrink=0.75, pad=0.08)
+
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_zlabel(output_label)
@@ -587,11 +639,11 @@ class VariableControl:
         self.variable_combo.grid(row=0, column=1, columnspan=2, sticky="ew", padx=(8, 0))
 
         ttk.Label(self.frame, text="Minimum").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        self.min_entry = ttk.Entry(self.frame, textvariable=self.min_var, width=18)
+        self.min_entry = ttk.Entry(self.frame, textvariable=self.min_var, width=12, justify="right")
         self.min_entry.grid(row=1, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         ttk.Label(self.frame, text="Maximum").grid(row=1, column=2, sticky="w", pady=(8, 0))
-        self.max_entry = ttk.Entry(self.frame, textvariable=self.max_var, width=18)
+        self.max_entry = ttk.Entry(self.frame, textvariable=self.max_var, width=12, justify="right")
         self.max_entry.grid(row=1, column=3, sticky="ew", pady=(8, 0))
 
         ttk.Label(self.frame, text="Scenario point").grid(row=2, column=0, sticky="w", pady=(10, 0))
@@ -737,7 +789,7 @@ class ConstantInputControl:
         self._last_valid_value = spec.default
 
         self.label = ttk.Label(parent, text=spec.label)
-        self.entry = ttk.Entry(parent, textvariable=self.var, width=18)
+        self.entry = ttk.Entry(parent, textvariable=self.var, width=12, justify="right")
 
         if spec.is_percentage:
             self.suffix = ttk.Label(parent, text="%")
@@ -751,8 +803,8 @@ class ConstantInputControl:
 
     def grid(self, row: int) -> None:
         self.label.grid(row=row, column=0, sticky="w", pady=2)
-        self.entry.grid(row=row, column=1, sticky="ew", padx=(8, 6), pady=2)
-        self.suffix.grid(row=row, column=2, sticky="w", pady=2)
+        self.entry.grid(row=row, column=1, sticky="w", padx=(4, 3), pady=2)
+        self.suffix.grid(row=row, column=2, sticky="w", padx=(0, 2), pady=2)
 
     def set_enabled(self, enabled: bool) -> None:
         self.entry.configure(state="normal" if enabled else "disabled")
@@ -803,7 +855,7 @@ class SensitivityApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("ERM Sensitivity Explorer")
-        self.root.geometry("1400x860")
+        self.root.geometry("1700x1020")
 
         self.catalog = ParameterCatalog()
         self.model = ERMModel()
@@ -836,7 +888,7 @@ class SensitivityApp:
             on_variable_changed=self._handle_variable_selection_change,
             get_current_values=lambda: self._read_constant_input_values(silent=True),
         )
-        self.var1_control.frame.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        self.var1_control.frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
         self.var2_control = VariableControl(
             controls,
@@ -846,7 +898,7 @@ class SensitivityApp:
             on_variable_changed=self._handle_variable_selection_change,
             get_current_values=lambda: self._read_constant_input_values(silent=True),
         )
-        self.var2_control.frame.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        self.var2_control.frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
         output_frame = ttk.LabelFrame(controls, text="Output", padding=10)
         output_frame.grid(row=2, column=0, sticky="ew", pady=(0, 12))
@@ -858,7 +910,9 @@ class SensitivityApp:
 
         self.constants_frame = ttk.LabelFrame(controls, text="Constant inputs", padding=10)
         self.constants_frame.grid(row=3, column=0, sticky="ew", pady=(0, 12))
-        self.constants_frame.columnconfigure(1, weight=1)
+        self.constants_frame.columnconfigure(0, weight=0)
+        self.constants_frame.columnconfigure(1, weight=0)
+        self.constants_frame.columnconfigure(2, weight=0)
 
         button_frame = ttk.Frame(controls)
         button_frame.grid(row=4, column=0, sticky="ew")
