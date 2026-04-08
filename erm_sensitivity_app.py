@@ -10,6 +10,7 @@ from tkinter import messagebox, ttk
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import proj3d
 
 
 # ============================================================
@@ -435,25 +436,27 @@ class PlotController:
 
         if self._last_mode == "surface" and self._two_way_data is not None:
             xx, yy, zz, x_label, y_label, output_label = self._two_way_data
-            if event.xdata is None or event.ydata is None:
+            if event.x is None or event.y is None:
                 return
 
-            # Approximate nearest visible point using projected x/y canvas coordinates.
             ax = self.figure.axes[0]
             points = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+
             projected = []
             for px, py, pz in points:
-                x2, y2, _ = ax.proj3d.proj_transform(px, py, pz, ax.get_proj())  # type: ignore[attr-defined]
-                projected.append((x2, y2))
+                x3, y3, _ = proj3d.proj_transform(px, py, pz, ax.get_proj())
+                xdisp, ydisp = ax.transData.transform((x3, y3))
+                projected.append((xdisp, ydisp))
+
             projected_arr = np.array(projected)
-            distances = (projected_arr[:, 0] - event.xdata) ** 2 + (projected_arr[:, 1] - event.ydata) ** 2
+            distances = (projected_arr[:, 0] - event.x) ** 2 + (projected_arr[:, 1] - event.y) ** 2
             idx = int(np.argmin(distances))
             nearest = points[idx]
+
             self._info_callback(
                 f"Nearest point: {x_label} = {nearest[0]:.6g}, "
                 f"{y_label} = {nearest[1]:.6g}, {output_label} = {nearest[2]:.6g}"
             )
-
 
 class VariableControl:
     def __init__(
@@ -463,6 +466,7 @@ class VariableControl:
         catalog: ParameterCatalog,
         range_manager: RangeManager,
         on_variable_changed: Callable[[], None],
+        get_current_values: Callable[[], Dict[str, float]],
     ) -> None:
         self._catalog = catalog
         self._range_manager = range_manager
@@ -475,6 +479,7 @@ class VariableControl:
         self.max_var = tk.StringVar()
         self.slider_var = tk.IntVar(value=0)
         self.current_value_var = tk.StringVar(value="-")
+        self._get_current_values = get_current_values
 
         self._entry_enabled = False
         self._state = VariableRangeState(None, 0.0, 1.0, RangeGrid.build(0.0, 1.0))
@@ -616,7 +621,7 @@ class VariableControl:
         self.current_value_var.set(ValueFormatter.display_value(self._state.grid.value_at(new_index), spec.is_percentage))
 
     def _current_value_context(self) -> Dict[str, float]:
-        values = {spec.key: spec.default for spec in self._catalog.all_specs()}
+        values = self._get_current_values()
         if self._state.key is not None:
             values[self._state.key] = self._state.max_value
         return values
@@ -628,6 +633,72 @@ class VariableControl:
         spec = self._catalog.spec(self._state.key)
         selected = self._state.grid.value_at(self.slider_var.get())
         self.current_value_var.set(ValueFormatter.display_value(selected, spec.is_percentage))
+
+class ConstantInputControl:
+    def __init__(self, parent: ttk.Frame, spec: InputSpec) -> None:
+        self.spec = spec
+        self.var = tk.StringVar()
+        self._last_valid_value = spec.default
+
+        self.label = ttk.Label(parent, text=spec.label)
+        self.entry = ttk.Entry(parent, textvariable=self.var, width=18)
+
+        if spec.is_percentage:
+            self.suffix = ttk.Label(parent, text="%")
+        else:
+            self.suffix = ttk.Label(parent, text="")
+
+        self.set_value(spec.default)
+
+        self.entry.bind("<FocusOut>", self._format_on_focus_out)
+        self.entry.bind("<Return>", self._format_on_focus_out)
+
+    def grid(self, row: int) -> None:
+        self.label.grid(row=row, column=0, sticky="w", pady=2)
+        self.entry.grid(row=row, column=1, sticky="ew", padx=(8, 6), pady=2)
+        self.suffix.grid(row=row, column=2, sticky="w", pady=2)
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.entry.configure(state="normal" if enabled else "disabled")
+
+    def set_value(self, value: float) -> None:
+        self._last_valid_value = value
+        self.var.set(self._format_value(value))
+
+    def get_value(self) -> float:
+        text = self.var.get().strip().replace(",", "")
+        value = float(text)
+        if self.spec.is_percentage:
+            value = value / 100.0
+        lower = self.spec.minimum
+        upper = self.spec.maximum
+        if value < lower or value > upper:
+            raise ValueError(
+                f"{self.spec.label} must be within "
+                f"[{ValueFormatter.display_value(lower, self.spec.is_percentage)}, "
+                f"{ValueFormatter.display_value(upper, self.spec.is_percentage)}]"
+            )
+        return value
+
+    def restore_previous(self) -> None:
+        self.var.set(self._format_value(self._last_valid_value))
+
+    def _format_on_focus_out(self, _event=None) -> None:
+        try:
+            value = self.get_value()
+            self._last_valid_value = value
+            self.var.set(self._format_value(value))
+        except ValueError:
+            self.restore_previous()
+
+    def _format_value(self, value: float) -> str:
+        if self.spec.is_percentage:
+            return f"{value * 100:.6g}"
+        if abs(value) >= 1000:
+            if float(value).is_integer():
+                return f"{int(round(value)):,}"
+            return f"{value:,.6f}".rstrip("0").rstrip(".")
+        return f"{value:.6g}"
 
 
 class SensitivityApp:
@@ -647,6 +718,7 @@ class SensitivityApp:
         self.info_var = tk.StringVar(value="Ready.")
         self.figure = Figure(figsize=(8.5, 6.2))
         self.plot_controller = PlotController(self.figure, self.info_var.set)
+        self.constant_controls: Dict[str, ConstantInputControl] = {}
 
         self._build_layout()
         self._initialize_controls()
@@ -666,6 +738,7 @@ class SensitivityApp:
             self.catalog,
             self.range_manager,
             on_variable_changed=self._handle_variable_selection_change,
+            get_current_values=lambda: self._read_constant_input_values(silent=True),
         )
         self.var1_control.frame.grid(row=0, column=0, sticky="ew", pady=(0, 12))
 
@@ -675,6 +748,7 @@ class SensitivityApp:
             self.catalog,
             self.range_manager,
             on_variable_changed=self._handle_variable_selection_change,
+            get_current_values=lambda: self._read_constant_input_values(silent=True),
         )
         self.var2_control.frame.grid(row=1, column=0, sticky="ew", pady=(0, 12))
 
@@ -686,8 +760,13 @@ class SensitivityApp:
         self.output_combo = ttk.Combobox(output_frame, textvariable=self.output_var, state="readonly", values=self.OUTPUT_OPTIONS)
         self.output_combo.grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
+        self.constants_frame = ttk.LabelFrame(controls, text="Constant inputs", padding=10)
+        self.constants_frame.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        self.constants_frame.columnconfigure(1, weight=1)
+
         self.update_button = ttk.Button(controls, text="Update", command=self.update_chart)
-        self.update_button.grid(row=3, column=0, sticky="ew")
+        self.update_button.grid(row=4, column=0, sticky="ew")
+
 
         chart_frame = ttk.Frame(self.root, padding=12)
         chart_frame.grid(row=0, column=1, sticky="nsew")
@@ -703,13 +782,30 @@ class SensitivityApp:
         info_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         ttk.Label(info_frame, textvariable=self.info_var).grid(row=0, column=0, sticky="w")
 
+    def _build_constant_inputs(self) -> None:
+        for child in self.constants_frame.winfo_children():
+            child.destroy()
+
+        self.constant_controls = {}
+        for row, spec in enumerate(self.catalog.all_specs()):
+            control = ConstantInputControl(self.constants_frame, spec)
+            control.grid(row=row)
+            self.constant_controls[spec.key] = control
+
+
     def _initialize_controls(self) -> None:
+        self._build_constant_inputs()
         all_labels = ["None"] + [spec.label for spec in self.catalog.all_specs()]
         self.var1_control.set_variable_options(all_labels, preserve_current=False)
         self.var2_control.set_variable_options(all_labels, preserve_current=False)
         self.var1_control.variable_var.set(self.catalog.label_for("risk_free_rate"))
         self.var2_control.variable_var.set("None")
         self._handle_variable_selection_change()
+
+    def _refresh_constant_input_states(self) -> None:
+        selected = {self.var1_control.selected_key, self.var2_control.selected_key}
+        for key, control in self.constant_controls.items():
+            control.set_enabled(key not in selected)
 
     def _handle_variable_selection_change(self) -> None:
         key1 = self.var1_control.selected_key
@@ -721,18 +817,28 @@ class SensitivityApp:
         self.var1_control.set_variable_options(labels1)
         self.var2_control.set_variable_options(labels2)
 
-        current_values = {spec.key: spec.default for spec in self.catalog.all_specs()}
+        current_values = self._read_constant_input_values(silent=True)
         self.var1_control.refresh_for_current_variable(current_values)
         self.var2_control.refresh_for_current_variable(current_values)
+        self._refresh_constant_input_states()
+
+    def _read_constant_input_values(self, silent: bool = False) -> Dict[str, float]:
+        values = {spec.key: spec.default for spec in self.catalog.all_specs()}
+
+        for key, control in self.constant_controls.items():
+            try:
+                values[key] = control.get_value()
+            except ValueError as exc:
+                control.restore_previous()
+                if not silent:
+                    messagebox.showerror("Invalid constant input", str(exc))
+                values[key] = control.spec.default
+
+        return values
 
     def _base_parameters(self) -> ERMParameters:
-        params = self.catalog.default_parameters()
-        updates: Dict[str, float] = {}
-        if self.var1_control.selected_key is not None:
-            updates[self.var1_control.selected_key] = self.var1_control.current_slider_value()
-        if self.var2_control.selected_key is not None:
-            updates[self.var2_control.selected_key] = self.var2_control.current_slider_value()
-        return params.updated(updates)
+        values = self._read_constant_input_values(silent=False)
+        return self.catalog.default_parameters().updated(values)
 
     def update_chart(self) -> None:
         key1 = self.var1_control.selected_key
@@ -742,7 +848,10 @@ class SensitivityApp:
             messagebox.showerror("Selection required", "Please choose at least one input variable.")
             return
 
-        base_params = self.catalog.default_parameters()
+        base_params = self._base_parameters()
+        current_values = self._read_constant_input_values(silent=True)
+        self.var1_control.refresh_for_current_variable(current_values)
+        self.var2_control.refresh_for_current_variable(current_values)
         output_key = self.output_var.get()
 
         if key2 is None:
