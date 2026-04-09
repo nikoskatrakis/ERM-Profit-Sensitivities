@@ -7,7 +7,7 @@ from typing import Dict, Optional, Sequence, Tuple
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
-
+# import streamlit.components.v1 as components
 
 @dataclass(frozen=True)
 class InputSpec:
@@ -249,10 +249,13 @@ def get_base_values(catalog: ParameterCatalog) -> Dict[str, float]:
 
 
 def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) -> float:
-    c1, c2, c3 = st.columns([0.80, 1.15, 0.16])
+    c1, c2, c3 = st.columns([1.55, 1.0, 0.35])
 
     with c1:
-        st.markdown(f"<div style='padding-top:0.35rem'>{spec.label}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='min-height:2.15rem; display:flex; align-items:center;'>{spec.label}</div>",
+            unsafe_allow_html=True,
+        )
 
     if spec.is_percentage:
         with c2:
@@ -268,11 +271,21 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
                 key=f"input_{spec.key}",
             )
         with c3:
-            st.markdown("<div style='padding-top:0.35rem'>%</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='min-height:2.15rem; display:flex; align-items:center;'>%</div>",
+                unsafe_allow_html=True,
+            )
         return out / 100.0
 
     step = 100.0 if spec.key == "house_price_start" else 1.0
-    fmt = "%.2f" if spec.key != "time_years" else "%.4f"
+    if spec.key == "time_years":
+        fmt = "%.0f"
+    elif spec.key == "house_price_start":
+        fmt = "%.0f"
+    else:
+        fmt = "%.2f"
+
+    display_value = float(value)
 
     with c2:
         return st.number_input(
@@ -280,7 +293,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
             label_visibility="collapsed",
             min_value=float(spec.minimum),
             max_value=float(spec.maximum),
-            value=float(value),
+            value=display_value,
             step=step,
             format=fmt,
             disabled=disabled,
@@ -291,7 +304,10 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
     c1, c2, c3 = st.columns([0.95, 1.00, 0.16])
 
     with c1:
-        st.markdown(f"<div style='padding-top:0.30rem'>{spec.label}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='min-height:2.15rem; display:flex; align-items:center;'>{spec.label}</div>",
+            unsafe_allow_html=True,
+        )
 
     if spec.is_percentage:
         with c2:
@@ -306,11 +322,21 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
                 key=f"range_input_{spec.key}",
             )
         with c3:
-            st.markdown("<div style='padding-top:0.30rem'>%</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='min-height:2.15rem; display:flex; align-items:center;'>%</div>",
+                unsafe_allow_html=True,
+            )
         return out / 100.0
 
     step = 100.0 if spec.key == "house_price_start" else 1.0
-    fmt = "%.2f" if spec.key != "time_years" else "%.4f"
+    if spec.key == "time_years":
+        fmt = "%.0f"
+    elif spec.key == "house_price_start":
+        fmt = "%.0f"
+    else:
+        fmt = "%.2f"
+
+    display_value = float(value)
 
     with c2:
         out = st.number_input(
@@ -318,13 +344,13 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
             label_visibility="collapsed",
             min_value=float(spec.minimum),
             max_value=float(spec.maximum),
-            value=float(value),
+            value=display_value,
             step=step,
             format=fmt,
             key=f"range_input_{spec.key}",
         )
     with c3:
-        st.markdown("<div style='padding-top:0.30rem'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='min-height:2.15rem; display:flex; align-items:center;'></div>", unsafe_allow_html=True)
     return out
 
 def tickvals_for_range(values: np.ndarray, n: int = 5) -> list[float]:
@@ -501,35 +527,20 @@ st.markdown("""
     padding-left: 0.8rem;
     padding-right: 0.8rem;
 }
-h1, h2, h3, p {
-    margin-top: 0rem !important;
-    margin-bottom: 0.15rem !important;
-}
-div[data-testid="stVerticalBlock"] {
-    gap: 0.2rem;
-}
+
 div[data-testid="stHorizontalBlock"] {
-    align-items: center;
+    align-items: center !important;
 }
+
 div[data-testid="stNumberInput"] button {
     display: none !important;
 }
-div[data-testid="stNumberInputStepUp"] {
-    display: none !important;
-}
-div[data-testid="stNumberInputStepDown"] {
-    display: none !important;
-}
-div[data-testid="stNumberInput"] input {
-    text-align: right !important;
-}
-div[data-testid="stTextInput"] input {
-    text-align: right !important;
-}
+
 div[data-testid="stNumberInput"] input,
 div[data-testid="stTextInput"] input {
-    padding-top: 0.28rem !important;
-    padding-bottom: 0.28rem !important;
+    text-align: right !important;
+    padding-top: 0rem !important;
+    padding-bottom: 0rem !important;
 }
 
 div[data-testid="stNumberInput"] > div,
@@ -538,12 +549,97 @@ div[data-testid="stTextInput"] > div {
 }
 
 div[data-baseweb="select"] > div {
-    min-height: 2.15rem !important;
+    min-height: 1.70rem !important;
+}
+div[data-testid="stNumberInput"] {
+    min-height: 1.70rem !important;
+}
+
+div[data-testid="stNumberInput"] > div {
+    min-height: 1.70rem !important;
+    height: 1.70rem !important;
+}
+
+div[data-testid="stNumberInput"] [data-baseweb="input"] {
+    min-height: 1.70rem !important;
+    height: 1.70rem !important;
+}
+
+div[data-testid="stNumberInput"] [data-baseweb="input"] > div {
+    min-height: 1.70rem !important;
+    height: 1.70rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+div[data-testid="stNumberInput"] input {
+    min-height: 1.70rem !important;
+    height: 1.70rem !important;
+    line-height: 1.70rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+div[data-testid="stNumberInput"] > div,
+div[data-testid="stTextInput"] > div {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+div[data-testid="stNumberInput"] [data-baseweb="input"],
+div[data-testid="stTextInput"] [data-baseweb="input"] {
+    height: 1.70rem !important;
+    min-height: 1.70rem !important;
+}
+
+div[data-testid="stNumberInput"] [data-baseweb="input"] > div,
+div[data-testid="stTextInput"] [data-baseweb="input"] > div {
+    height: 1.70rem !important;
+    min-height: 1.70rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input {
+    height: 1.70rem !important;
+    min-height: 1.70rem !important;
+    line-height: 1.70rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### ERM Sensitivity Explorer")
+st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+st.subheader("ERM Sensitivity Explorer", divider=False)
+
+# st.header("ERM Sensitivity Explorer", divider=False)
+# components.html(
+#     """
+#     <script>
+#       function forceTop() {
+#         try {
+#           const p = window.parent;
+#           p.scrollTo(0, 0);
+#           if (p.document && p.document.documentElement) {
+#             p.document.documentElement.scrollTop = 0;
+#           }
+#           if (p.document && p.document.body) {
+#             p.document.body.scrollTop = 0;
+#           }
+#         } catch (e) {}
+#       }
+
+#       forceTop();
+#       setTimeout(forceTop, 50);
+#       setTimeout(forceTop, 150);
+#       setTimeout(forceTop, 300);
+#       setTimeout(forceTop, 600);
+#     </script>
+#     """,
+#     height=0,
+#     width=0,
+# )
 
 catalog = ParameterCatalog()
 model = ERMModel()
@@ -552,13 +648,16 @@ base_values = get_base_values(catalog)
 left_col, right_col = st.columns([1.05, 2.15])
 
 with left_col:
-    st.markdown("**Scenario controls**")
+    st.markdown("<div style='text-align:center;'><b>Scenario controls</b></div>", unsafe_allow_html=True)
     labels = [spec.label for spec in catalog.all_specs()]
     label_to_key = {spec.label: spec.key for spec in catalog.all_specs()}
 
-    v1label_col, v1box_col = st.columns([0.42, 1.58])
+    v1label_col, v1box_col = st.columns([0.50, 1.50])
     with v1label_col:
-        st.markdown("<div style='padding-top:0.30rem'><b>Variable 1</b></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Variable 1</b></div>",
+            unsafe_allow_html=True,
+        )
     with v1box_col:
         var1_label = st.selectbox(
             "Variable 1",
@@ -605,9 +704,12 @@ with left_col:
 
     var2_options = ["None"] + [label for label in labels if label != var1_label]
 
-    v2label_col, v2box_col = st.columns([0.42, 1.58])
+    v2label_col, v2box_col = st.columns([0.50, 1.50])
     with v2label_col:
-        st.markdown("<div style='padding-top:0.30rem'><b>Variable 2</b></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Variable 2</b></div>",
+            unsafe_allow_html=True,
+        )
     with v2box_col:
         var2_label = st.selectbox(
             "Variable 2",
@@ -660,9 +762,12 @@ with left_col:
             st.markdown("<div style='height: 4.6rem;'></div>", unsafe_allow_html=True)
             v2_grid = None
 
-    outlabel_col, outbox_col = st.columns([0.42, 1.58])
+    outlabel_col, outbox_col = st.columns([0.50, 1.50])
     with outlabel_col:
-        st.markdown("<div style='padding-top:0.30rem'><b>Output metric</b></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Output metric</b></div>",
+            unsafe_allow_html=True,
+        )
     with outbox_col:
         output_key = st.selectbox(
             "Output metric",
@@ -671,7 +776,7 @@ with left_col:
             label_visibility="collapsed",
         )
 
-    st.markdown("**Constant inputs**")
+    st.markdown("<div style='text-align:center;'><b>Constant inputs</b></div>", unsafe_allow_html=True)
     edited_values = dict(base_values)
     selected = {var1_key, var2_key}
     for spec in catalog.all_specs():
@@ -682,7 +787,11 @@ with left_col:
         )
 
     loan_amount = edited_values["house_price_start"] * edited_values["ltv"]
-    st.text_input("Loan amount", value=f"{loan_amount:,.2f}", disabled=True)
+    loan_label_col, loan_box_col = st.columns([0.42, 1.58])
+    with loan_label_col:
+        st.markdown("<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Loan amount</b></div>", unsafe_allow_html=True)
+    with loan_box_col:
+        st.text_input("Loan amount", value=f"{loan_amount:,.0f}", label_visibility="collapsed", disabled=True)
 
     render_chart = st.button("Update", type="primary", width="stretch")
 
