@@ -477,10 +477,39 @@ h1, h2, h3, p {
 div[data-testid="stVerticalBlock"] {
     gap: 0.2rem;
 }
+div[data-testid="stNumberInput"] button {
+    display: none !important;
+}
+div[data-testid="stNumberInputStepUp"] {
+    display: none !important;
+}
+div[data-testid="stNumberInputStepDown"] {
+    display: none !important;
+}
+div[data-testid="stNumberInput"] input {
+    text-align: right !important;
+}
+div[data-testid="stTextInput"] input {
+    text-align: right !important;
+}
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input {
+    padding-top: 0.28rem !important;
+    padding-bottom: 0.28rem !important;
+}
+
+div[data-testid="stNumberInput"] > div,
+div[data-testid="stTextInput"] > div {
+    min-height: 0 !important;
+}
+
+div[data-baseweb="select"] > div {
+    min-height: 2.15rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.caption("ERM Sensitivity Explorer")
+st.markdown("### ERM Sensitivity Explorer")
 
 catalog = ParameterCatalog()
 model = ERMModel()
@@ -493,12 +522,105 @@ with left_col:
     labels = [spec.label for spec in catalog.all_specs()]
     label_to_key = {spec.label: spec.key for spec in catalog.all_specs()}
 
-    var1_label = st.selectbox("Variable 1", labels, index=labels.index(catalog.label_for("risk_free_rate")))
+    st.markdown("**Variable 1**")
+    var1_label = st.selectbox(
+        "Variable 1",
+        labels,
+        index=labels.index(catalog.label_for("risk_free_rate")),
+        label_visibility="collapsed",
+    )
     var1_key = label_to_key[var1_label]
+
+    var1_spec = catalog.spec(var1_key)
+    v1c1, v1c2 = st.columns(2)
+    with v1c1:
+        v1_min = apply_number_input(
+            InputSpec(
+                f"{var1_key}_min",
+                f"{var1_spec.label} minimum",
+                var1_spec.minimum,
+                var1_spec.minimum,
+                var1_spec.maximum,
+                var1_spec.is_percentage,
+            ),
+            var1_spec.minimum,
+        )
+    with v1c2:
+        v1_max = apply_number_input(
+            InputSpec(
+                f"{var1_key}_max",
+                f"{var1_spec.label} maximum",
+                var1_spec.maximum,
+                var1_spec.minimum,
+                var1_spec.maximum,
+                var1_spec.is_percentage,
+            ),
+            var1_spec.maximum,
+        )
+
+    if v1_min >= v1_max:
+        st.error("Variable 1 minimum must be strictly smaller than maximum.")
+        st.stop()
+    v1_grid = build_range_grid(v1_min, v1_max)
+
     var2_options = ["None"] + [label for label in labels if label != var1_label]
-    var2_label = st.selectbox("Variable 2", var2_options, index=0)
+
+    st.markdown("**Variable 2**")
+    var2_label = st.selectbox(
+        "Variable 2",
+        var2_options,
+        index=0,
+        label_visibility="collapsed",
+    )
     var2_key = None if var2_label == "None" else label_to_key[var2_label]
-    output_key = st.selectbox("Output metric", ("Day1Gain", "Profit"), index=1)
+
+    # reserved space directly below Variable 2
+    var2_range_container = st.container()
+
+    with var2_range_container:
+        if var2_key is not None:
+            var2_spec = catalog.spec(var2_key)
+            v2c1, v2c2 = st.columns(2)
+            with v2c1:
+                v2_min = apply_number_input(
+                    InputSpec(
+                        f"{var2_key}_min",
+                        f"{var2_spec.label} minimum",
+                        var2_spec.minimum,
+                        var2_spec.minimum,
+                        var2_spec.maximum,
+                        var2_spec.is_percentage,
+                    ),
+                    var2_spec.minimum,
+                )
+            with v2c2:
+                v2_max = apply_number_input(
+                    InputSpec(
+                        f"{var2_key}_max",
+                        f"{var2_spec.label} maximum",
+                        var2_spec.maximum,
+                        var2_spec.minimum,
+                        var2_spec.maximum,
+                        var2_spec.is_percentage,
+                    ),
+                    var2_spec.maximum,
+                )
+
+            if v2_min >= v2_max:
+                st.error("Variable 2 minimum must be strictly smaller than maximum.")
+                st.stop()
+            v2_grid = build_range_grid(v2_min, v2_max)
+        else:
+            st.markdown("<div style='height: 5.2rem;'></div>", unsafe_allow_html=True)
+            v2_grid = None
+
+    st.markdown("**Output metric**")
+    output_key = st.selectbox(
+        "Output metric",
+        ("Day1Gain", "Profit"),
+        index=1,
+        label_visibility="collapsed",
+    )
 
     st.markdown("**Constant inputs**")
     edited_values = dict(base_values)
@@ -509,25 +631,6 @@ with left_col:
     loan_amount = edited_values["house_price_start"] * edited_values["ltv"]
     st.text_input("Loan amount", value=f"{loan_amount:,.2f}", disabled=True)
 
-    st.markdown("**Variable ranges**")
-    var1_spec = catalog.spec(var1_key)
-    v1_min = apply_number_input(InputSpec(f"{var1_key}_min", f"{var1_spec.label} minimum", var1_spec.minimum, var1_spec.minimum, var1_spec.maximum, var1_spec.is_percentage), var1_spec.minimum)
-    v1_max = apply_number_input(InputSpec(f"{var1_key}_max", f"{var1_spec.label} maximum", var1_spec.maximum, var1_spec.minimum, var1_spec.maximum, var1_spec.is_percentage), var1_spec.maximum)
-    if v1_min >= v1_max:
-        st.error("Variable 1 minimum must be strictly smaller than maximum.")
-        st.stop()
-    v1_grid = build_range_grid(v1_min, v1_max)
-
-    if var2_key is not None:
-        var2_spec = catalog.spec(var2_key)
-        v2_min = apply_number_input(InputSpec(f"{var2_key}_min", f"{var2_spec.label} minimum", var2_spec.minimum, var2_spec.minimum, var2_spec.maximum, var2_spec.is_percentage), var2_spec.minimum)
-        v2_max = apply_number_input(InputSpec(f"{var2_key}_max", f"{var2_spec.label} maximum", var2_spec.maximum, var2_spec.minimum, var2_spec.maximum, var2_spec.is_percentage), var2_spec.maximum)
-        if v2_min >= v2_max:
-            st.error("Variable 2 minimum must be strictly smaller than maximum.")
-            st.stop()
-        v2_grid = build_range_grid(v2_min, v2_max)
-    else:
-        v2_grid = None
 
     render_chart = st.button("Update", type="primary", width='stretch')
 
