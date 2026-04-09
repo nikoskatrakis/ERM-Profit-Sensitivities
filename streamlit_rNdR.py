@@ -249,7 +249,7 @@ def get_base_values(catalog: ParameterCatalog) -> Dict[str, float]:
 
 
 def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) -> float:
-    c1, c2, c3 = st.columns([1.55, 1.0, 0.35])
+    c1, c2, c3 = st.columns([0.80, 1.15, 0.16])
 
     with c1:
         st.markdown(f"<div style='padding-top:0.35rem'>{spec.label}</div>", unsafe_allow_html=True)
@@ -286,6 +286,46 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
             disabled=disabled,
             key=f"input_{spec.key}",
         )
+
+def apply_range_input(spec: InputSpec, value: float) -> float:
+    c1, c2, c3 = st.columns([0.95, 1.00, 0.16])
+
+    with c1:
+        st.markdown(f"<div style='padding-top:0.30rem'>{spec.label}</div>", unsafe_allow_html=True)
+
+    if spec.is_percentage:
+        with c2:
+            out = st.number_input(
+                label=f"range_{spec.key}",
+                label_visibility="collapsed",
+                min_value=float(spec.minimum * 100),
+                max_value=float(spec.maximum * 100),
+                value=float(value * 100),
+                step=0.1,
+                format="%.2f",
+                key=f"range_input_{spec.key}",
+            )
+        with c3:
+            st.markdown("<div style='padding-top:0.30rem'>%</div>", unsafe_allow_html=True)
+        return out / 100.0
+
+    step = 100.0 if spec.key == "house_price_start" else 1.0
+    fmt = "%.2f" if spec.key != "time_years" else "%.4f"
+
+    with c2:
+        out = st.number_input(
+            label=f"range_{spec.key}",
+            label_visibility="collapsed",
+            min_value=float(spec.minimum),
+            max_value=float(spec.maximum),
+            value=float(value),
+            step=step,
+            format=fmt,
+            key=f"range_input_{spec.key}",
+        )
+    with c3:
+        st.markdown("<div style='padding-top:0.30rem'></div>", unsafe_allow_html=True)
+    return out
 
 def tickvals_for_range(values: np.ndarray, n: int = 5) -> list[float]:
     vmin = float(np.min(values))
@@ -367,19 +407,8 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
 
     fig = go.Figure()
 
-    fig.add_trace(
-        go.Surface(
-            x=xx,
-            y=yy,
-            z=zz,
-            colorscale="RdYlGn",
-            cmin=cmin,
-            cmax=cmax,
-            colorbar=dict(title=output_key),
-            showscale=True,
-            hoverinfo="skip",
-        )
-    )
+
+
 
     fig.add_trace(
         go.Scatter3d(
@@ -388,12 +417,13 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
             z=zz.ravel(),
             mode="markers",
             marker=dict(
-                size=3,
+                size=5,
                 color=zz.ravel(),
                 colorscale="RdYlGn",
                 cmin=cmin,
                 cmax=cmax,
-                opacity=0.9,
+                opacity=1.0,
+                colorbar=dict(title=output_key),
             ),
             customdata=customdata,
             hovertemplate=(
@@ -412,6 +442,7 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
         height=470,
         margin=dict(l=5, r=5, t=30, b=5),
         title=f"{output_key} surface",
+        hovermode="closest",
         scene=dict(
             xaxis=dict(
                 title=x_key,
@@ -477,6 +508,9 @@ h1, h2, h3, p {
 div[data-testid="stVerticalBlock"] {
     gap: 0.2rem;
 }
+div[data-testid="stHorizontalBlock"] {
+    align-items: center;
+}
 div[data-testid="stNumberInput"] button {
     display: none !important;
 }
@@ -515,29 +549,33 @@ catalog = ParameterCatalog()
 model = ERMModel()
 base_values = get_base_values(catalog)
 
-left_col, right_col = st.columns([0.82, 2.38])
+left_col, right_col = st.columns([1.05, 2.15])
 
 with left_col:
     st.markdown("**Scenario controls**")
     labels = [spec.label for spec in catalog.all_specs()]
     label_to_key = {spec.label: spec.key for spec in catalog.all_specs()}
 
-    st.markdown("**Variable 1**")
-    var1_label = st.selectbox(
-        "Variable 1",
-        labels,
-        index=labels.index(catalog.label_for("risk_free_rate")),
-        label_visibility="collapsed",
-    )
+    v1label_col, v1box_col = st.columns([0.42, 1.58])
+    with v1label_col:
+        st.markdown("<div style='padding-top:0.30rem'><b>Variable 1</b></div>", unsafe_allow_html=True)
+    with v1box_col:
+        var1_label = st.selectbox(
+            "Variable 1",
+            labels,
+            index=labels.index(catalog.label_for("risk_free_rate")),
+            label_visibility="collapsed",
+        )
     var1_key = label_to_key[var1_label]
 
     var1_spec = catalog.spec(var1_key)
     v1c1, v1c2 = st.columns(2)
+
     with v1c1:
-        v1_min = apply_number_input(
+        v1_min = apply_range_input(
             InputSpec(
                 f"{var1_key}_min",
-                f"{var1_spec.label} minimum",
+                "Minimum",
                 var1_spec.minimum,
                 var1_spec.minimum,
                 var1_spec.maximum,
@@ -545,11 +583,12 @@ with left_col:
             ),
             var1_spec.minimum,
         )
+
     with v1c2:
-        v1_max = apply_number_input(
+        v1_max = apply_range_input(
             InputSpec(
                 f"{var1_key}_max",
-                f"{var1_spec.label} maximum",
+                "Maximum",
                 var1_spec.maximum,
                 var1_spec.minimum,
                 var1_spec.maximum,
@@ -561,31 +600,36 @@ with left_col:
     if v1_min >= v1_max:
         st.error("Variable 1 minimum must be strictly smaller than maximum.")
         st.stop()
+
     v1_grid = build_range_grid(v1_min, v1_max)
 
     var2_options = ["None"] + [label for label in labels if label != var1_label]
 
-    st.markdown("**Variable 2**")
-    var2_label = st.selectbox(
-        "Variable 2",
-        var2_options,
-        index=0,
-        label_visibility="collapsed",
-    )
+    v2label_col, v2box_col = st.columns([0.42, 1.58])
+    with v2label_col:
+        st.markdown("<div style='padding-top:0.30rem'><b>Variable 2</b></div>", unsafe_allow_html=True)
+    with v2box_col:
+        var2_label = st.selectbox(
+            "Variable 2",
+            var2_options,
+            index=0,
+            label_visibility="collapsed",
+        )
+
     var2_key = None if var2_label == "None" else label_to_key[var2_label]
 
-    # reserved space directly below Variable 2
     var2_range_container = st.container()
 
     with var2_range_container:
         if var2_key is not None:
             var2_spec = catalog.spec(var2_key)
             v2c1, v2c2 = st.columns(2)
+
             with v2c1:
-                v2_min = apply_number_input(
+                v2_min = apply_range_input(
                     InputSpec(
                         f"{var2_key}_min",
-                        f"{var2_spec.label} minimum",
+                        "Minimum",
                         var2_spec.minimum,
                         var2_spec.minimum,
                         var2_spec.maximum,
@@ -593,11 +637,12 @@ with left_col:
                     ),
                     var2_spec.minimum,
                 )
+
             with v2c2:
-                v2_max = apply_number_input(
+                v2_max = apply_range_input(
                     InputSpec(
                         f"{var2_key}_max",
-                        f"{var2_spec.label} maximum",
+                        "Maximum",
                         var2_spec.maximum,
                         var2_spec.minimum,
                         var2_spec.maximum,
@@ -609,30 +654,37 @@ with left_col:
             if v2_min >= v2_max:
                 st.error("Variable 2 minimum must be strictly smaller than maximum.")
                 st.stop()
+
             v2_grid = build_range_grid(v2_min, v2_max)
         else:
-            st.markdown("<div style='height: 5.2rem;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 4.6rem;'></div>", unsafe_allow_html=True)
             v2_grid = None
 
-    st.markdown("**Output metric**")
-    output_key = st.selectbox(
-        "Output metric",
-        ("Day1Gain", "Profit"),
-        index=1,
-        label_visibility="collapsed",
-    )
+    outlabel_col, outbox_col = st.columns([0.42, 1.58])
+    with outlabel_col:
+        st.markdown("<div style='padding-top:0.30rem'><b>Output metric</b></div>", unsafe_allow_html=True)
+    with outbox_col:
+        output_key = st.selectbox(
+            "Output metric",
+            ("Day1Gain", "Profit"),
+            index=1,
+            label_visibility="collapsed",
+        )
 
     st.markdown("**Constant inputs**")
     edited_values = dict(base_values)
     selected = {var1_key, var2_key}
     for spec in catalog.all_specs():
-        edited_values[spec.key] = apply_number_input(spec, edited_values[spec.key], disabled=(spec.key in selected))
+        edited_values[spec.key] = apply_number_input(
+            spec,
+            edited_values[spec.key],
+            disabled=(spec.key in selected),
+        )
 
     loan_amount = edited_values["house_price_start"] * edited_values["ltv"]
     st.text_input("Loan amount", value=f"{loan_amount:,.2f}", disabled=True)
 
-
-    render_chart = st.button("Update", type="primary", width='stretch')
+    render_chart = st.button("Update", type="primary", width="stretch")
 
 base_params = catalog.default_parameters().updated(edited_values)
 
