@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: erm-sensitivities-rndr
+    runtime: python
+    buildCommand: pip install -r requirements_rNdR.txt
+    startCommand: streamlit run streamlit_rNdR.py --server.address 0.0.0.0 --server.port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
