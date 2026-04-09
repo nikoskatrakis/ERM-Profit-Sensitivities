@@ -14,6 +14,7 @@ from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import proj3d
 from matplotlib import cm
 from matplotlib.colors import TwoSlopeNorm
+from matplotlib import colormaps
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -41,7 +42,7 @@ class ERMParameters:
     house_price_start: float = 100_000.0
     time_years: float = 10.0
     funding_cost: float = 0.02
-    loan_amount: float = 30_000.0
+    ltv: float = 0.30
     coc_rate: float = 0.045
     risk_free_rate: float = 0.045
     scr_level: float = 0.995
@@ -62,7 +63,7 @@ class ERMResults:
     pv_expected_payoff: float
     expected_payoff_at_sale: float
     accumulated_loan: float
-
+    loan_amount: float
 
 class NormalDistribution:
     @staticmethod
@@ -117,7 +118,8 @@ class ERMModel:
         ln_price_scr = scr_mu + sigma * scr_percentile
         house_price_scr = exp(ln_price_scr)
 
-        accumulated_loan = params.loan_amount * (1.0 + params.loan_rate) ** params.time_years
+        loan_amount = params.house_price_start * params.ltv
+        accumulated_loan = loan_amount * (1.0 + params.loan_rate) ** params.time_years
         scr = np.maximum(accumulated_loan - house_price_scr,0)
 
         base = exp(-params.scr_decay_factor) / (1.0 + params.risk_free_rate)
@@ -140,8 +142,8 @@ class ERMModel:
         expected_payoff_at_sale = term_full_repayment + term_shortfall_repayment
         pv_expected_payoff = expected_payoff_at_sale * exp(-params.risk_free_rate * params.time_years)
 
-        funding_cost_value = params.funding_cost * params.loan_amount
-        day1_gain = pv_expected_payoff - params.loan_amount - funding_cost_value
+        funding_cost_value = params.funding_cost * loan_amount
+        day1_gain = pv_expected_payoff - loan_amount - funding_cost_value
         profit = day1_gain - cost_of_capital
         profit_at_sale = profit * exp(params.risk_free_rate * params.time_years)
 
@@ -155,6 +157,7 @@ class ERMModel:
             pv_expected_payoff=pv_expected_payoff,
             expected_payoff_at_sale=expected_payoff_at_sale,
             accumulated_loan=accumulated_loan,
+            loan_amount=loan_amount,
         )
 
 
@@ -168,7 +171,7 @@ class ParameterCatalog:
             "house_price_start": InputSpec("house_price_start", "House price at inception", 100_000.0, 50_000.0, 50_000_000.0),
             "time_years": InputSpec("time_years", "Projection term (years)", 10.0, 1.0, 50.0),
             "funding_cost": InputSpec("funding_cost", "Funding cost", 0.02, 0.0, 0.20, is_percentage=True),
-            "loan_amount": InputSpec("loan_amount", "Loan amount", 30_000.0, 10_000.0, 100_000.0, dynamic_max_key="house_price_start"),
+            "ltv": InputSpec("ltv", "LTV", 0.30, 0.01, 0.80, is_percentage=True),
             "coc_rate": InputSpec("coc_rate", "SCR CoC percentage used for pricing", 0.045, 0.01, 0.10, is_percentage=True),
             "risk_free_rate": InputSpec("risk_free_rate", "Risk-free rate", 0.045, 0.0005, 0.20, is_percentage=True),
             "scr_level": InputSpec("scr_level", "SCR percentile", 0.995, 0.50, 0.9999, is_percentage=True),
@@ -182,7 +185,7 @@ class ParameterCatalog:
             house_price_start=self._specs["house_price_start"].default,
             time_years=self._specs["time_years"].default,
             funding_cost=self._specs["funding_cost"].default,
-            loan_amount=self._specs["loan_amount"].default,
+            ltv=self._specs["ltv"].default,
             coc_rate=self._specs["coc_rate"].default,
             risk_free_rate=self._specs["risk_free_rate"].default,
             scr_level=self._specs["scr_level"].default,
@@ -248,6 +251,7 @@ class ValueFormatter:
             "risk_free_rate",
             "scr_level",
             "scr_decay_factor",
+            "ltv",
         }
 
     @staticmethod
@@ -255,9 +259,10 @@ class ValueFormatter:
         percentage_names = {
             "rw_hpi", "deferment_rate", "loan_rate", "house_price_volatility",
             "funding_cost", "coc_rate", "risk_free_rate", "scr_level", "scr_decay_factor",
+            "ltv",
             "HPI", "Deferment rate", "Loan accumulation rate", "House price volatility",
             "Funding cost", "SCR CoC percentage used for pricing", "Risk-free rate",
-            "SCR percentile", "SCR decay factor",
+            "SCR percentile", "SCR decay factor", "LTV",
         }
         money_names = {
             "house_price_start", "loan_amount", "Day1Gain", "Profit",
@@ -277,9 +282,10 @@ class ValueFormatter:
         percentage_names = {
             "rw_hpi", "deferment_rate", "loan_rate", "house_price_volatility",
             "funding_cost", "coc_rate", "risk_free_rate", "scr_level", "scr_decay_factor",
+            "ltv",
             "HPI", "Deferment rate", "Loan accumulation rate", "House price volatility",
             "Funding cost", "SCR CoC percentage used for pricing", "Risk-free rate",
-            "SCR percentile", "SCR decay factor",
+            "SCR percentile", "SCR decay factor", "LTV",
         }
         money_names = {
             "house_price_start", "loan_amount", "Day1Gain", "Profit",
@@ -462,7 +468,7 @@ class PlotController:
         ax = self.figure.add_subplot(111)
         y_min = float(np.min(y))
         y_max = float(np.max(y))
-        cmap = cm.get_cmap("RdYlGn")
+        cmap = colormaps["RdYlGn"]
 
         if y_min < 0 < y_max:
             norm = TwoSlopeNorm(vmin=y_min, vcenter=0.0, vmax=y_max)
@@ -513,7 +519,7 @@ class PlotController:
         ax = self.figure.add_subplot(111, projection="3d")
         z_min = float(np.min(zz))
         z_max = float(np.max(zz))
-        cmap = cm.get_cmap("RdYlGn")
+        cmap = colormaps["RdYlGn"]
 
         if z_min < 0 < z_max:
             norm = TwoSlopeNorm(vmin=z_min, vcenter=0.0, vmax=z_max)
@@ -783,13 +789,15 @@ class VariableControl:
         self.current_value_var.set(ValueFormatter.display_value(selected, spec.is_percentage))
 
 class ConstantInputControl:
-    def __init__(self, parent: ttk.Frame, spec: InputSpec) -> None:
+    def __init__(self, parent: ttk.Frame, spec: InputSpec, read_only: bool = False) -> None:
         self.spec = spec
+        self.read_only = read_only
         self.var = tk.StringVar()
         self._last_valid_value = spec.default
 
         self.label = ttk.Label(parent, text=spec.label)
-        self.entry = ttk.Entry(parent, textvariable=self.var, width=12, justify="right")
+        state = "readonly" if read_only else "normal"
+        self.entry = ttk.Entry(parent, textvariable=self.var, width=12, justify="right", state=state)
 
         if spec.is_percentage:
             self.suffix = ttk.Label(parent, text="%")
@@ -798,8 +806,9 @@ class ConstantInputControl:
 
         self.set_value(spec.default)
 
-        self.entry.bind("<FocusOut>", self._format_on_focus_out)
-        self.entry.bind("<Return>", self._format_on_focus_out)
+        if not self.read_only:
+            self.entry.bind("<FocusOut>", self._format_on_focus_out)
+            self.entry.bind("<Return>", self._format_on_focus_out)
 
     def grid(self, row: int) -> None:
         self.label.grid(row=row, column=0, sticky="w", pady=2)
@@ -807,6 +816,8 @@ class ConstantInputControl:
         self.suffix.grid(row=row, column=2, sticky="w", padx=(0, 2), pady=2)
 
     def set_enabled(self, enabled: bool) -> None:
+        if self.read_only:
+            return
         self.entry.configure(state="normal" if enabled else "disabled")
 
     def set_value(self, value: float) -> None:
@@ -842,12 +853,16 @@ class ConstantInputControl:
     def _format_value(self, value: float) -> str:
         if self.spec.is_percentage:
             return f"{value * 100:.6g}"
+
+        if self.read_only:
+            return f"{value / 1000:.1f}K" if abs(value) >= 1000 else f"{value:.2f}"
+
         if abs(value) >= 1000:
             if float(value).is_integer():
                 return f"{int(round(value)):,}"
             return f"{value:,.6f}".rstrip("0").rstrip(".")
-        return f"{value:.6g}"
 
+        return f"{value:.6g}"
 
 class SensitivityApp:
     OUTPUT_OPTIONS = ("Day1Gain", "Profit")
@@ -949,6 +964,16 @@ class SensitivityApp:
             control.grid(row=row)
             self.constant_controls[spec.key] = control
 
+        derived_spec = InputSpec("loan_amount", "Loan amount", 30_000.0, 0.0, 0.0, is_percentage=False)
+        self.loan_amount_display = ConstantInputControl(self.constants_frame, derived_spec, read_only=True)
+        self.loan_amount_display.grid(row=len(self.catalog.all_specs()))
+
+    def _refresh_derived_loan_amount_display(self) -> None:
+        values = self._read_constant_input_values(silent=True)
+        house_value = values["house_price_start"]
+        ltv = values["ltv"]
+        loan_amount = house_value * ltv
+        self.loan_amount_display.set_value(loan_amount)
 
     def _initialize_controls(self) -> None:
         self._build_constant_inputs()
@@ -958,8 +983,10 @@ class SensitivityApp:
         self.var1_control.variable_var.set(self.catalog.label_for("risk_free_rate"))
         self.var2_control.variable_var.set("None")
         self._handle_variable_selection_change()
+        self._refresh_derived_loan_amount_display()
 
     def _refresh_constant_input_states(self) -> None:
+        self._refresh_derived_loan_amount_display()
         selected = {self.var1_control.selected_key, self.var2_control.selected_key}
         for key, control in self.constant_controls.items():
             control.set_enabled(key not in selected)
@@ -1007,6 +1034,7 @@ class SensitivityApp:
 
         base_params = self._base_parameters()
         current_values = self._read_constant_input_values(silent=True)
+        self._refresh_derived_loan_amount_display()
         self.var1_control.refresh_for_current_variable(current_values)
         self.var2_control.refresh_for_current_variable(current_values)
         output_key = self.output_var.get()
@@ -1021,7 +1049,7 @@ class SensitivityApp:
                 y,
                 self.catalog.label_for(key1),
                 output_key,
-                base_params.loan_amount,
+                base_params.house_price_start * base_params.ltv,
             )
             return
 
@@ -1038,7 +1066,7 @@ class SensitivityApp:
             self.catalog.label_for(key1),
             self.catalog.label_for(key2),
             output_key,
-            base_params.loan_amount,
+            base_params.house_price_start * base_params.ltv,
         )
 
     def run(self) -> None:
