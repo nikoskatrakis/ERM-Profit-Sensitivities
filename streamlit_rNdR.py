@@ -205,7 +205,7 @@ class ValueFormatter:
         }
         money_names = {"house_price_start", "loan_amount", "Day1Gain", "Profit", "House price at inception", "Loan amount"}
         if key_or_label in percentage_names:
-            return f"{value * 100:.1f}%"
+            return f"{value * 100:.2f}%"
         if key_or_label in money_names:
             return f"{value / 1000:.3f}K" if abs(value) >= 1000 else f"{value:.2f}"
         return f"{value:.6g}"
@@ -247,9 +247,8 @@ def get_base_values(catalog: ParameterCatalog) -> Dict[str, float]:
         "scr_decay_factor": p.scr_decay_factor,
     }
 
-
 def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) -> float:
-    c1, c2, c3 = st.columns([0.95, 1.00, 0.12])
+    c1, c2, c3 = st.columns([1.55, 1.0, 0.10])
 
     with c1:
         st.markdown(
@@ -271,18 +270,38 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
                 key=f"input_{spec.key}",
             )
         with c3:
-            st.markdown("<div class='percent-cell'>%</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='percent-cell'>%</div>",
+                unsafe_allow_html=True,
+            )
         return out / 100.0
 
-    step = 100.0 if spec.key == "house_price_start" else 1.0
-    if spec.key == "time_years":
-        fmt = "%.0f"
-    elif spec.key == "house_price_start":
-        fmt = "%.0f"
-    else:
-        fmt = "%.2f"
+    if spec.key == "loan_amount_display":
+        with c2:
+            st.text_input(
+                label=f"{spec.label}_value",
+                label_visibility="collapsed",
+                value=f"{round(value):.0f}",
+                disabled=True,
+            )
+            return float(round(value))
 
-    display_value = float(value)
+    if spec.key == "house_price_start":
+        with c2:
+            return st.number_input(
+                label=f"{spec.label}_value",
+                label_visibility="collapsed",
+                min_value=float(spec.minimum),
+                max_value=float(spec.maximum),
+                value=float(round(value)),
+                step=100.0,
+                format="%.0f",
+                disabled=disabled,
+                key=f"input_{spec.key}",
+            )
+
+    step = 1.0
+    fmt = "%.0f" if spec.key == "time_years" else "%.2f"
 
     with c2:
         return st.number_input(
@@ -290,7 +309,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
             label_visibility="collapsed",
             min_value=float(spec.minimum),
             max_value=float(spec.maximum),
-            value=display_value,
+            value=float(value),
             step=step,
             format=fmt,
             disabled=disabled,
@@ -420,13 +439,12 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
         limit = max(abs(zmin), abs(zmax), 1e-12)
         cmin, cmax = -limit, limit
 
-    customdata = np.column_stack([
-        xx.ravel(),
-        yy.ravel(),
-        zz.ravel(),
-        np.repeat(np.arange(xx.shape[0]), xx.shape[1]),
-        np.tile(np.arange(xx.shape[1]), xx.shape[0]),
-    ])
+    customdata = []
+    for xv, yv, zv in zip(xx.ravel(), yy.ravel(), zz.ravel()):
+        x_txt = ValueFormatter.format_point_value(float(xv), x_key)
+        y_txt = ValueFormatter.format_point_value(float(yv), y_key)
+        z_txt = ValueFormatter.format_point_value(float(zv), output_key)
+        customdata.append([x_txt, y_txt, z_txt])
 
     fig = go.Figure()
 
@@ -447,9 +465,9 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
             ),
             customdata=customdata,
             hovertemplate=(
-                f"{x_key}: %{{x}}<br>"
-                f"{y_key}: %{{y}}<br>"
-                f"{output_key}: %{{z}}<extra></extra>"
+                f"{x_key}: %{{customdata[0]}}<br>"
+                f"{y_key}: %{{customdata[1]}}<br>"
+                f"{output_key}: %{{customdata[2]}}<extra></extra>"
             ),
         )
     )
