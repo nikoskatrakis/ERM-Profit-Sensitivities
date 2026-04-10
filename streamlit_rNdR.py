@@ -249,7 +249,7 @@ def get_base_values(catalog: ParameterCatalog) -> Dict[str, float]:
 
 
 def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) -> float:
-    c1, c2, c3 = st.columns([1.55, 1.0, 0.35])
+    c1, c2, c3 = st.columns([0.95, 1.00, 0.12])
 
     with c1:
         st.markdown(
@@ -271,10 +271,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
                 key=f"input_{spec.key}",
             )
         with c3:
-            st.markdown(
-                "<div class='tight-row-label'>%</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("<div class='percent-cell'>%</div>", unsafe_allow_html=True)
         return out / 100.0
 
     step = 100.0 if spec.key == "house_price_start" else 1.0
@@ -301,7 +298,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
         )
 
 def apply_range_input(spec: InputSpec, value: float) -> float:
-    c1, c2, c3 = st.columns([0.95, 1.00, 0.16])
+    c1, c2, c3 = st.columns([0.95, 1.00, 0.12])
 
     with c1:
         st.markdown(
@@ -322,10 +319,7 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
                 key=f"range_input_{spec.key}",
             )
         with c3:
-            st.markdown(
-                "<div class='tight-row-label'>%</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("<div class='percent-cell'>%</div>", unsafe_allow_html=True)
         return out / 100.0
 
     step = 100.0 if spec.key == "house_price_start" else 1.0
@@ -436,9 +430,6 @@ def build_surface_chart(xx: np.ndarray, yy: np.ndarray, zz: np.ndarray, x_key: s
 
     fig = go.Figure()
 
-
-
-
     fig.add_trace(
         go.Scatter3d(
             x=xx.ravel(),
@@ -506,7 +497,6 @@ def compute_one_way(model: ERMModel, base_params: ERMParameters, variable_key: s
         y[i] = result.day1_gain if output_key == "Day1Gain" else result.profit
     return x, y
 
-
 def compute_two_way(model: ERMModel, base_params: ERMParameters, x_key: str, x_values: Sequence[float], y_key: str, y_values: Sequence[float], output_key: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     xv = np.array(x_values, dtype=float)
     yv = np.array(y_values, dtype=float)
@@ -530,7 +520,19 @@ st.markdown("""
     padding-left: 0.8rem;
     padding-right: 0.8rem;
 }
-
+.percent-cell {
+    min-height: 1.35rem !important;
+    height: 1.35rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.0 !important;
+    position: relative !important;
+    top: -7px !important;
+    left: -14px !important;
+}           
 div[data-testid="stNumberInput"] button {
     display: none !important;
 }
@@ -592,7 +594,8 @@ div[data-testid="column"] {
     align-items: center !important;
     margin: 0 !important;
     padding: 0 !important;
-    line-height: 1.0 !important;
+    line-height: 1.35rem !important;
+    position: static !important;
 }
 
 div[data-testid="stMarkdownContainer"] p {
