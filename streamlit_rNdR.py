@@ -253,7 +253,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
 
     with c1:
         st.markdown(
-            f"<div style='min-height:2.15rem; display:flex; align-items:center;'>{spec.label}</div>",
+            f"<div style='min-height:1.70rem; display:flex; align-items:center;'>{spec.label}</div>",
             unsafe_allow_html=True,
         )
 
@@ -272,7 +272,7 @@ def apply_number_input(spec: InputSpec, value: float, disabled: bool = False) ->
             )
         with c3:
             st.markdown(
-                "<div style='min-height:2.15rem; display:flex; align-items:center;'>%</div>",
+                "<div style='min-height:1.70rem; display:flex; align-items:center;'>%</div>",
                 unsafe_allow_html=True,
             )
         return out / 100.0
@@ -305,7 +305,7 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
 
     with c1:
         st.markdown(
-            f"<div style='min-height:2.15rem; display:flex; align-items:center;'>{spec.label}</div>",
+            f"<div style='min-height:1.70rem; display:flex; align-items:center;'>{spec.label}</div>",
             unsafe_allow_html=True,
         )
 
@@ -323,7 +323,7 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
             )
         with c3:
             st.markdown(
-                "<div style='min-height:2.15rem; display:flex; align-items:center;'>%</div>",
+                "<div style='min-height:1.70rem; display:flex; align-items:center;'>%</div>",
                 unsafe_allow_html=True,
             )
         return out / 100.0
@@ -350,7 +350,7 @@ def apply_range_input(spec: InputSpec, value: float) -> float:
             key=f"range_input_{spec.key}",
         )
     with c3:
-        st.markdown("<div style='min-height:2.15rem; display:flex; align-items:center;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='min-height:1.70rem; display:flex; align-items:center;'></div>", unsafe_allow_html=True)
     return out
 
 def tickvals_for_range(values: np.ndarray, n: int = 5) -> list[float]:
@@ -527,7 +527,6 @@ st.markdown("""
     padding-left: 0.8rem;
     padding-right: 0.8rem;
 }
-
 div[data-testid="stHorizontalBlock"] {
     align-items: center !important;
 }
@@ -655,7 +654,7 @@ with left_col:
     v1label_col, v1box_col = st.columns([0.50, 1.50])
     with v1label_col:
         st.markdown(
-            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Variable 1</b></div>",
+            "<div style='min-height:1.70rem; display:flex; align-items:center;'><b>Variable 1</b></div>",
             unsafe_allow_html=True,
         )
     with v1box_col:
@@ -707,7 +706,7 @@ with left_col:
     v2label_col, v2box_col = st.columns([0.50, 1.50])
     with v2label_col:
         st.markdown(
-            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Variable 2</b></div>",
+            "<div style='min-height:1.70rem; display:flex; align-items:center;'><b>Variable 2</b></div>",
             unsafe_allow_html=True,
         )
     with v2box_col:
@@ -765,7 +764,7 @@ with left_col:
     outlabel_col, outbox_col = st.columns([0.50, 1.50])
     with outlabel_col:
         st.markdown(
-            "<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Output metric</b></div>",
+            "<div style='min-height:1.70rem; display:flex; align-items:center;'><b>Output metric</b></div>",
             unsafe_allow_html=True,
         )
     with outbox_col:
@@ -789,7 +788,7 @@ with left_col:
     loan_amount = edited_values["house_price_start"] * edited_values["ltv"]
     loan_label_col, loan_box_col = st.columns([0.42, 1.58])
     with loan_label_col:
-        st.markdown("<div style='min-height:2.15rem; display:flex; align-items:center;'><b>Loan amount</b></div>", unsafe_allow_html=True)
+        st.markdown("<div style='min-height:1.70rem; display:flex; align-items:center;'><b>Loan amount</b></div>", unsafe_allow_html=True)
     with loan_box_col:
         st.text_input("Loan amount", value=f"{loan_amount:,.0f}", label_visibility="collapsed", disabled=True)
 
